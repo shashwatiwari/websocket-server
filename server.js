@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server, clientTracking: true });
 
 // Store active connections
 const activeConnections = {};

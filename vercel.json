@@ -11,5 +11,11 @@
             "src": "/(.*)",
             "dest": "server.js"
         }
+    ],
+    "rewrites": [
+        {
+            "source": "/wss",
+            "destination": "wss://websocket-server-roan.vercel.app/"
+        }
     ]
 }
