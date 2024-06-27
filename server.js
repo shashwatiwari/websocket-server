@@ -1,83 +1,26 @@
 const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
 const cors = require('cors');
+const bodyParser = require('body-parser');
+const Pusher = require('pusher');
 
 const app = express();
 app.use(cors());
+app.use(bodyParser.json());
 
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, clientTracking: true });
+const pusher = new Pusher({
+    appId: "1825267",
+    key: "2202a930a6cdae8b3963",
+    secret: "4d18a11a2671355e6843",
+    cluster: "ap2",
+    useTLS: true
+});
 
-// Store active connections
 const activeConnections = {};
 
-// Define your routes here
-app.get('/', (req, res) => {
-    res.json({ message: 'Hello from the server dude!' });
-});
+// Generate a unique ID for each user
+const generateUniqueId = () => 'id-' + Math.random().toString(36).substr(2, 16);
 
-wss.on('connection', (ws) => {
-    const id = generateUniqueId();
-    console.log(`User ${id} connected`);
-
-    // Store the user's socket
-    activeConnections[id] = ws;
-
-    // Find a random partner to connect with
-    const partnerId = findRandomPartner(id);
-
-    if (partnerId) {
-        // Notify both users about the connection
-        ws.send(JSON.stringify({ type: 'partnerConnected', id: partnerId }));
-        activeConnections[partnerId].send(JSON.stringify({ type: 'partnerConnected', id: id }));
-        console.log(`User ${id} connected to user ${partnerId}`);
-    }
-
-    ws.on('message', (message) => {
-        const parsedMessage = JSON.parse(message);
-        const { type, data } = parsedMessage;
-
-        const partnerId = ws.partnerId;
-        if (partnerId) {
-            const partnerSocket = activeConnections[partnerId];
-            if (partnerSocket) {
-                partnerSocket.send(JSON.stringify({ type, data }));
-            }
-        }
-
-        if (type === 'signal') {
-            const partnerSocket = activeConnections[partnerId];
-            if (partnerSocket) {
-                partnerSocket.send(JSON.stringify({ type: 'signal', data }));
-            }
-        }
-
-        if (type === 'stream') {
-            const partnerSocket = activeConnections[partnerId];
-            if (partnerSocket) {
-                partnerSocket.send(JSON.stringify({ type: 'stream', data }));
-            }
-        }
-    });
-
-    ws.on('close', () => {
-        console.log(`User ${id} disconnected`);
-
-        const partnerId = ws.partnerId;
-        if (partnerId) {
-            const partnerSocket = activeConnections[partnerId];
-            if (partnerSocket) {
-                partnerSocket.send(JSON.stringify({ type: 'partnerDisconnected' }));
-            }
-        }
-
-        // Remove the user's socket from active connections
-        delete activeConnections[id];
-    });
-});
-
-function findRandomPartner(id) {
+const findRandomPartner = (id) => {
     const activeIds = Object.keys(activeConnections).filter(activeId => activeId !== id);
     if (activeIds.length > 0) {
         const randomId = activeIds[Math.floor(Math.random() * activeIds.length)];
@@ -90,17 +33,67 @@ function findRandomPartner(id) {
         return randomId;
     }
     return null;
-}
+};
 
-function generateUniqueId() {
-    return 'id-' + Math.random().toString(36).substr(2, 16);
-}
+// Route for initial connection
+app.post('/connect', (req, res) => {
+    const id = generateUniqueId();
+    console.log(`User ${id} connected`);
 
-app.get('*', (req, res) => {
-    res.send({ msg: "hey 404" });
+    // Store the user's ID
+    activeConnections[id] = { id };
+    console.log(activeConnections);
+    const partnerId = findRandomPartner(id);
+    if (partnerId) {
+        console.log(`User ${id} connected to user ${partnerId}`);
+        pusher.trigger('my-channel', 'partnerConnected', { id, partnerId });
+    }
+
+    res.json({ id, partnerId });
+});
+
+// Route for sending messages
+app.post('/send-message', (req, res) => {
+    const { message, id } = req.body;
+    const { partnerId } = activeConnections[id] || {};
+
+    if (partnerId) {
+        pusher.trigger('my-channel', 'message', { message, partnerId });
+        console.log(`Message from ${id} to ${partnerId}: ${message}`);
+    }
+    console.log(activeConnections);
+
+    res.status(200).json({ status: 'OK' });
+});
+
+// Route for disconnecting
+app.post('/disconnect', (req, res) => {
+    const { id } = req.body;
+    const { partnerId } = activeConnections[id] || {};
+
+    if (partnerId) {
+        pusher.trigger('my-channel', 'partnerDisconnected', { partnerId });
+        console.log(`User ${id} disconnected from user ${partnerId}`);
+        activeConnections[partnerId].partnerId = null;
+    }
+
+    delete activeConnections[id];
+    res.sendStatus(200);
+});
+
+// Pusher authentication endpoint
+app.post('/pusher/auth', (req, res) => {
+    const socketId = req.body.socket_id;
+    const channel = req.body.channel_name;
+    const auth = pusher.authenticate(socketId, channel);
+    res.send(auth);
+});
+
+app.get('/', (req, res) => {
+    res.send({ msg: 'Pusher Server is running' });
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
+app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
