@@ -21,7 +21,7 @@ const activeConnections = {};
 const generateUniqueId = () => 'id-' + Math.random().toString(36).substr(2, 16);
 
 const findRandomPartner = (id) => {
-    const activeIds = Object.keys(activeConnections).filter(activeId => activeId !== id);
+    const activeIds = Object.keys(activeConnections).filter(activeId => activeId !== id && !activeConnections[activeId].partnerId);
     if (activeIds.length > 0) {
         const randomId = activeIds[Math.floor(Math.random() * activeIds.length)];
         const partnerSocket = activeConnections[randomId];
