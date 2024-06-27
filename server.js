@@ -91,7 +91,8 @@ app.post('/pusher/auth', (req, res) => {
 
 // Route for handling signaling data
 app.post('/signal', (req, res) => {
-    const { signal, id, partnerId } = req.body;
+    const { signal, id } = req.body;
+    const partnerId = activeConnections[id].partnerId;
     if (activeConnections[partnerId]) {
         pusher.trigger('my-channel', 'client-signal', { signal, id: partnerId });
         console.log(`Signal from ${id} to ${partnerId}:`, signal);
