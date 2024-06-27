@@ -89,6 +89,16 @@ app.post('/pusher/auth', (req, res) => {
     res.send(auth);
 });
 
+// Route for handling signaling data
+app.post('/signal', (req, res) => {
+    const { signal, id, partnerId } = req.body;
+    if (activeConnections[partnerId]) {
+        pusher.trigger('my-channel', 'client-signal', { signal, id: partnerId });
+        console.log(`Signal from ${id} to ${partnerId}:`, signal);
+    }
+    res.status(200).json({ status: 'OK' });
+});
+
 app.get('/', (req, res) => {
     res.send({ msg: 'Pusher Server is running' });
 });
